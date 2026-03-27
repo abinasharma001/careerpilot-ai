@@ -1,32 +1,89 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from notion_client import Client
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
+# 🔐 Secure credentials (from .env)
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 DATABASE_ID = os.getenv("DATABASE_ID")
 
+# Initialize Notion client
 notion = Client(auth=NOTION_API_KEY)
+
 
 # 📊 Fetch jobs from Notion
 def get_jobs():
-    response = notion.databases.query(
-        database_id=DATABASE_ID
-    )
-    return response["results"]
+    try:
+        response = notion.databases.query(
+            database_id=DATABASE_ID
+        )
+        return response["results"]
+    except Exception as e:
+        print("Notion Error:", e)
+        return []
 
-# 🏠 Home route
+
+# 🏠 Serve frontend UI
 @app.route("/")
 def home():
-    return "🚀 CareerPilot AI Backend Running!"
+    return render_template("index.html")
 
-# 🤖 Smart AI Route
+
+# 🤖 AI Logic
+def smart_ai(query, jobs):
+    total = len(jobs)
+
+    # Extract some info
+    companies = []
+    statuses = []
+
+    for job in jobs:
+        props = job.get("properties", {})
+
+        # Company name
+        company = props.get("Company", {}).get("title", [])
+        if company:
+            companies.append(company[0]["plain_text"])
+
+        # Status
+        status = props.get("Status", {}).get("select")
+        if status:
+            statuses.append(status["name"])
+
+    # Logic responses
+    if "how many" in query or "applied" in query:
+        return f"You have applied to {total} jobs."
+
+    elif "company" in query:
+        return f"You applied to: {', '.join(companies) if companies else 'No companies found'}"
+
+    elif "interview" in query:
+        interviews = statuses.count("Interview")
+        return f"You have {interviews} interviews scheduled."
+
+    elif "status" in query:
+        return f"Statuses: {', '.join(statuses)}"
+
+    elif "suggest" in query or "improve" in query:
+        if total < 5:
+            return "Apply to more companies 🚀"
+        elif total < 10:
+            return "Good progress 👍 Keep applying!"
+        else:
+            return "Great job! Focus on interview prep 🎯"
+
+    else:
+        return "Ask me about your job applications 📊"
+
+
+# 🤖 API route
 @app.route("/ask", methods=["POST"])
 def ask():
     try:
@@ -35,71 +92,14 @@ def ask():
 
         jobs = get_jobs()
 
-        # 📊 Count jobs
-        if "how many" in query or "applied" in query:
-            return jsonify({
-                "answer": f"You have applied to {len(jobs)} jobs 📊"
-            })
+        answer = smart_ai(query, jobs)
 
-        # 🏢 List companies
-        elif "company" in query or "companies" in query:
-            companies = []
-
-            for job in jobs:
-                try:
-                    name = job["properties"]["Company"]["title"][0]["text"]["content"]
-                    companies.append(name)
-                except:
-                    pass
-
-            if companies:
-                return jsonify({
-                    "answer": "You applied to: " + ", ".join(companies)
-                })
-            else:
-                return jsonify({
-                    "answer": "No companies found"
-                })
-
-        # 📌 Status breakdown
-        elif "status" in query:
-            status_count = {}
-
-            for job in jobs:
-                try:
-                    status = job["properties"]["Status"]["status"]["name"]
-                    status_count[status] = status_count.get(status, 0) + 1
-                except:
-                    pass
-
-            if status_count:
-                result = ", ".join([f"{k}: {v}" for k, v in status_count.items()])
-                return jsonify({
-                    "answer": f"Your application status: {result}"
-                })
-            else:
-                return jsonify({
-                    "answer": "No status data found"
-                })
-
-        # 🚀 Suggestions
-        elif "suggest" in query or "advice" in query:
-            return jsonify({
-                "answer": "🚀 Suggestion: Apply to at least 3 more companies this week and focus on high-priority roles!"
-            })
-
-        # 🎯 Default
-        else:
-            return jsonify({
-                "answer": "🤖 I can help with job tracking, companies, status, and suggestions!"
-            })
+        return jsonify({"answer": answer})
 
     except Exception as e:
-        return jsonify({
-            "answer": "⚠️ Error: " + str(e)
-        })
+        return jsonify({"answer": "⚠️ Error: " + str(e)})
 
-# ▶️ Run server
+
+# 🚀 Run app
 if __name__ == "__main__":
     app.run(debug=True)
-    
