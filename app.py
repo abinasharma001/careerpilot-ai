@@ -1,13 +1,16 @@
-from notion_client import Client
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from notion_client import Client
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 YOUR CONFIG
-NOTION_API_KEY = "secret_xxx"
-DATABASE_ID = "330012223c0b80c1b915e21483ad2a62"
+NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+DATABASE_ID = os.getenv("DATABASE_ID")
 
 notion = Client(auth=NOTION_API_KEY)
 
@@ -99,3 +102,4 @@ def ask():
 # ▶️ Run server
 if __name__ == "__main__":
     app.run(debug=True)
+    
